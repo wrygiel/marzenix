@@ -24,7 +24,7 @@
 
     #character {
       position: absolute;
-      bottom: 33%; /* baseline in lower 1/3 */
+      bottom: 20%;
       left: 50%;
       transform: translateX(-50%);
       width: var(--character-size);
@@ -34,8 +34,6 @@
 
     @keyframes rotate360 {
       0% { transform: translateX(-50%) rotate(0deg); }
-      40% { transform: translateX(-50%) rotate(150deg); }
-      60% { transform: translateX(-50%) rotate(210deg); }
       100% { transform: translateX(-50%) rotate(359deg); }
     }
   </style>
@@ -61,11 +59,13 @@
 
   <script>
     // === CONFIGURABLE CONSTANTS ===
-    const TEMPO_BPM = 55;
-    const BEAT_OFFSET_MS = 500;
-    const CHARACTER_SCALE = 0.2;
-    const JUMP_HEIGHT_VH = 30;
-    const ROTATION_PROBABILITY = 0.2;
+    const TEMPO_BPM = 110;
+    const BEAT_OFFSET_MS = 200;
+    const CHARACTER_SCALE = 0.4;
+    const JUMP_HEIGHT_VH = 35;
+    const ROTATION_PROBABILITY = 0.4;
+    const SIDE_MOVEMENT_RANGE = 40; // percentage of screen width
+    const SCALE_BOUNCE_FACTOR = 1; // how much to scale during bounce
 
     const character = document.getElementById('character');
     const music = document.getElementById('music');
@@ -74,6 +74,7 @@
     let isPlaying = false;
     let animationId = null;
     let nextBeatTime = 0;
+    let beatCount = 0;
 
     function updateCharacterSize() {
       const size = window.innerWidth * CHARACTER_SCALE;
@@ -83,20 +84,109 @@
     window.addEventListener('resize', updateCharacterSize);
     updateCharacterSize();
 
-    function bounceAndMaybeSpin() {
-      const doSpin = Math.random() < ROTATION_PROBABILITY;
-      character.style.transition = 'transform 0.4s ease-out';
-      character.style.transform = `translate(-50%, -${JUMP_HEIGHT_VH}vh) ${doSpin ? 'rotate(360deg)' : ''}`;
+    function getRandomMove() {
+      if (Math.random() < 0.6 && (beatCount & 1 === 1)) {
+        return () => {};  // High chance of no move on odd beats
+      }
+
+      const moves = [
+        () => bounceOnly(),
+        () => bounceWithSpin(),
+        () => bounceWithSideMove(),
+        () => bounceWithScale(),
+        () => bounceWithDoubleSpin(),
+        () => bounceWithWiggle(),
+      ];
+
+      // Higher chance for basic moves, lower for complex ones
+      const weights = [0.3, 0.25, 0.2, 0.15, 0.07, 0.03];
+      const random = Math.random();
+      let cumulativeWeight = 0;
+
+      for (let i = 0; i < weights.length; i++) {
+        cumulativeWeight += weights[i];
+        if (random <= cumulativeWeight) {
+          return moves[i];
+        }
+      }
+      return moves[0]; // fallback
+    }
+
+    function bounceOnly() {
+      character.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      character.style.transform = `translate(-50%, -${JUMP_HEIGHT_VH}vh)`;
 
       setTimeout(() => {
         character.style.transform = 'translate(-50%, 0px)';
       }, 200);
     }
 
+    function bounceWithSpin() {
+      const rotations = Math.random() > 0.5 ? 360 : -360;
+      character.style.transition = 'transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+      character.style.transform = `translate(-50%, -${JUMP_HEIGHT_VH + 5}vh) rotate(${rotations}deg)`;
+
+      setTimeout(() => {
+        character.style.transform = 'translate(-50%, 0px) rotate(0deg)';
+      }, 250);
+    }
+
+    function bounceWithSideMove() {
+      const sideOffset = (Math.random() - 0.5) * SIDE_MOVEMENT_RANGE;
+      character.style.transition = 'transform 0.45s ease-out';
+      character.style.transform = `translate(calc(-50% + ${sideOffset}vw), -${JUMP_HEIGHT_VH}vh)`;
+
+      setTimeout(() => {
+        character.style.transform = 'translate(-50%, 0px)';
+      }, 225);
+    }
+
+    function bounceWithScale() {
+      const scaleAmount = 1 + SCALE_BOUNCE_FACTOR;
+      character.style.transition = 'transform 0.4s ease-out';
+      character.style.transform = `translate(-50%, -${JUMP_HEIGHT_VH - 5}vh) scale(${scaleAmount})`;
+
+      setTimeout(() => {
+        character.style.transform = 'translate(-50%, 0px) scale(1)';
+      }, 200);
+    }
+
+    function bounceWithDoubleSpin() {
+      character.style.transition = 'transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+      character.style.transform = `translate(-50%, -${JUMP_HEIGHT_VH + 10}vh) rotate(720deg)`;
+
+      setTimeout(() => {
+        character.style.transform = 'translate(-50%, 0px) rotate(0deg)';
+      }, 300);
+    }
+
+    function bounceWithWiggle() {
+      character.style.transition = 'transform 0.1s ease-in-out';
+
+      // Quick wiggle sequence
+      const wiggleSequence = [
+        () => character.style.transform = `translate(-55%, -10vh) rotate(15deg)`,
+        () => character.style.transform = `translate(-45%, -20vh) rotate(-15deg)`,
+        () => character.style.transform = `translate(-55%, -${JUMP_HEIGHT_VH}vh) rotate(10deg)`,
+        () => character.style.transform = `translate(-45%, -25vh) rotate(-10deg)`,
+        () => character.style.transform = `translate(-50%, 0px) rotate(0deg)`
+      ];
+
+      wiggleSequence.forEach((action, index) => {
+        setTimeout(action, index * 80);
+      });
+    }
+
+    function performRandomMove() {
+      const moveFunction = getRandomMove();
+      moveFunction();
+      beatCount++;
+    }
+
     function animationLoop(time) {
       if (!isPlaying) return;
       if (time >= nextBeatTime) {
-        bounceAndMaybeSpin();
+        performRandomMove();
         nextBeatTime += 60000 / TEMPO_BPM;
       }
       animationId = requestAnimationFrame(animationLoop);
@@ -109,6 +199,7 @@
         nextBeatTime = performance.now() + BEAT_OFFSET_MS;
         animationId = requestAnimationFrame(animationLoop);
         playButton.style.display = 'none';
+        beatCount = 0;
       } catch (err) {
         console.error('Playback failed:', err);
       }
