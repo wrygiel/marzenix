@@ -27,7 +27,7 @@
       bottom: 20%;
       left: 50%;
       transform: translateX(-50%);
-      width: var(--character-size);
+      width: auto;
       height: var(--character-size);
       will-change: transform;
     }
@@ -40,7 +40,7 @@
 </head>
 <body>
   <div id="container">
-    <img id="character" src="nie-i-chuj.webp" alt="Wkurwiony Marzenix">
+    <img id="character" src="umc-umc.jpg" alt="Wkurwiony Marzenix">
     <audio id="music" src="marzenix-z-porem.mp3" preload="auto" loop="true"></audio>
 
     <button id="playButton" style="
@@ -59,9 +59,9 @@
 
   <script>
     // === CONFIGURABLE CONSTANTS ===
-    const TEMPO_BPM = 110;
-    const BEAT_OFFSET_MS = 200;
-    const CHARACTER_SCALE = 0.4;
+    const TEMPO_BPM = 107;
+    const BEAT_OFFSET_MS = 0;
+    const CHARACTER_SCALE = 0.35;
     const JUMP_HEIGHT_VH = 35;
     const ROTATION_PROBABILITY = 0.4;
     const SIDE_MOVEMENT_RANGE = 40; // percentage of screen width
@@ -77,7 +77,7 @@
     let beatCount = 0;
 
     function updateCharacterSize() {
-      const size = window.innerWidth * CHARACTER_SCALE;
+      const size = window.innerHeight * CHARACTER_SCALE;
       character.style.setProperty('--character-size', `${size}px`);
     }
 
@@ -85,7 +85,7 @@
     updateCharacterSize();
 
     function getRandomMove() {
-      if (Math.random() < 0.6 && (beatCount & 1 === 1)) {
+      if (Math.random() < 0.4 && (beatCount & 1 === 1)) {
         return () => {};  // High chance of no move on odd beats
       }
 
@@ -181,6 +181,7 @@
       const moveFunction = getRandomMove();
       moveFunction();
       beatCount++;
+      console.log(`Beat ${beatCount}`);
     }
 
     function animationLoop(time) {
