@@ -1,200 +1,307 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>marzenix.pl</title>
-  <style>
-    html, body {
-      margin: 0;
-      background: #111;
-      overflow: hidden;
-      height: 100%;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: flex-end;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>marzenix.pl</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #111;
+        overflow: hidden;
+        height: 100%;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+      }
 
-    #container {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      perspective: 800px;
-    }
+      #container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        perspective: 800px;
+      }
 
-    #character, .ghost {
-      position: absolute;
-      bottom: 20%;
-      left: 50%;
-      width: auto;
-      height: var(--character-size);
-      mix-blend-mode: luminosity;
-      will-change: transform, opacity;
-    }
-    #character { z-index: 100; }
-    .ghost { z-index: 99; }
-  </style>
-</head>
-<body>
-  <div id="container">
-    <img id="character" src="umc-umc.jpg" alt="Wkurwiony Marzenix">
-  </div>
-  <audio id="music" src="marzenix-z-porem.mp3" preload="auto" loop="true"></audio>
-  <button id="playButton" style="
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    padding: 1em 2em;
-    font-size: 1.5em;
-    z-index: 1000;
-    cursor: pointer;
-  ">
-    ▶
-  </button>
+      #character,
+      .ghost {
+        position: absolute;
+        bottom: 20%;
+        left: 50%;
+        width: auto;
+        height: var(--character-size);
+        mix-blend-mode: luminosity;
+        will-change: transform, opacity;
+      }
+      #character {
+        z-index: 100;
+      }
+      .ghost {
+        z-index: 99;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <img id="character" src="umc-umc.jpg" alt="Wkurwiony Marzenix" />
+    </div>
+    <audio
+      id="music"
+      src="marzenix-z-porem.mp3"
+      preload="auto"
+      loop="true"
+    ></audio>
+    <button
+      id="playButton"
+      style="
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 1em 2em;
+        font-size: 1.5em;
+        z-index: 1000;
+        cursor: pointer;
+      "
+    >
+      ▶
+    </button>
 
-  <script>
-    // === CONFIGURABLE CONSTANTS ===
-    const TEMPO_BPM = 107;
-    const BEAT_OFFSET_MS = 0;
-    const CHARACTER_SCALE = 0.35;
-    const JUMP_HEIGHT_VH = 35;
-    const SIDE_MOVEMENT_RANGE_VW = 40;
-    const SCALE_BOUNCE_FACTOR = 1.3;
-    const GHOSTS_PER_FRAME = 8;
-    const EASE_FACTOR = 0.20;
-    const MOTION_THRESHOLD = 0.5;
+    <script>
+      // === CONFIGURABLE CONSTANTS ===
+      const TEMPO_BPM = 107;
+      const BEAT_OFFSET_MS = 0;
+      const CHARACTER_SCALE = 0.35;
+      const JUMP_HEIGHT_VH = 35;
+      const SIDE_MOVEMENT_RANGE_VW = 40;
+      const SCALE_BOUNCE_FACTOR = 1.3;
+      const GHOSTS_PER_FRAME = 8;
+      const EASE_FACTOR = 0.2;
+      const MOTION_THRESHOLD = 0.5;
+      const CHARACTER_IMAGES = [
+        { src: "umc-umc.jpg", weight: 5 },
+        { src: "nie-i-chuj.webp", weight: 5 },
+        { src: "factorio.jpg", weight: 1 },
+        { src: "kazachstan.jpg", weight: 1 },
+        { src: "la-kuppa.jpg", weight: 1 },
+        { src: "ser.jpg", weight: 2 },
+        { src: "yyyy.webp", weight: 1 },
+      ];
 
-    const container = document.getElementById('container');
-    const character = document.getElementById('character');
-    const music = document.getElementById('music');
-    const playButton = document.getElementById('playButton');
+      const SWITCH_PROBABILITY = 0.15;
 
-    let isPlaying = false;
-    let animationId = null;
-    let nextBeatTime = 0;
-    let beatCount = 0;
+      const container = document.getElementById("container");
+      const character = document.getElementById("character");
+      const music = document.getElementById("music");
+      const playButton = document.getElementById("playButton");
 
-    const ghosts = [];
-    for (let i = 0; i < GHOSTS_PER_FRAME; i++) {
+      let isPlaying = false;
+      let animationId = null;
+      let nextBeatTime = 0;
+      let beatCount = 0;
+
+      const ghosts = [];
+      for (let i = 0; i < GHOSTS_PER_FRAME; i++) {
         const ghost = character.cloneNode(true);
-        ghost.classList.add('ghost');
-        ghost.removeAttribute('id');
+        ghost.classList.add("ghost");
+        ghost.removeAttribute("id");
         container.appendChild(ghost);
         ghosts.push(ghost);
-    }
-    const trailElements = [...ghosts, character];
-
-    let currentState = { x: 0, y: 0, scale: 1, rot: 0 };
-    let targetState = { x: 0, y: 0, scale: 1, rot: 0 };
-    let lastFrameState = { ...currentState };
-
-    function updateCharacterSize() {
-      const size = window.innerHeight * CHARACTER_SCALE;
-      trailElements.forEach(el => { el.style.height = `${size}px`; });
-    }
-
-    const lerp = (a, b, alpha) => a + (b - a) * alpha;
-    function setAnimationTarget(duration) {
-      setTimeout(() => {
-        targetState.x = 0;
-        targetState.y = 0;
-        targetState.scale = 1;
-        targetState.rot = targetState.rot % 360;
-      }, duration);
-    }
-    function bounceOnly() { targetState.y = -window.innerHeight*(JUMP_HEIGHT_VH/100); setAnimationTarget(400); }
-    function bounceWithSpin() { targetState.y = -window.innerHeight*((JUMP_HEIGHT_VH+5)/100); targetState.rot += (Math.random()>0.5?360:-360); setAnimationTarget(500); }
-    function bounceWithSideMove() { targetState.y = -window.innerHeight*(JUMP_HEIGHT_VH/100); targetState.x = (Math.random()-0.5)*(window.innerWidth*(SIDE_MOVEMENT_RANGE_VW/100)); setAnimationTarget(450); }
-    function bounceWithScale() { targetState.y = -window.innerHeight*((JUMP_HEIGHT_VH-5)/100); targetState.scale = SCALE_BOUNCE_FACTOR; setAnimationTarget(400); }
-    function bounceWithDoubleSpin() { targetState.y = -window.innerHeight*((JUMP_HEIGHT_VH+10)/100); targetState.rot += (Math.random()>0.5?720:-720); setAnimationTarget(600); }
-    function bounceWithWiggle() {
-      const baseRot = targetState.rot;
-      const sequence = [
-        { t: 80, s: { x: -50, y: -100, rot: baseRot + 15 } }, { t: 80, s: { x: 50, y: -200, rot: baseRot - 15 } },
-        { t: 80, s: { x: -50, y: -300, rot: baseRot + 10 } }, { t: 80, s: { x: 0, y: 0, rot: baseRot } },
-      ];
-      let delay = 0;
-      sequence.forEach(step => { setTimeout(() => { Object.assign(targetState, step.s); }, delay); delay += step.t; });
-    }
-    function performRandomMove() {
-      const moves = [ bounceOnly, bounceWithSpin, bounceWithSideMove, bounceWithScale, bounceWithDoubleSpin, bounceWithWiggle ];
-      const weights = [0.3, 0.25, 0.2, 0.15, 0.07, 0.03];
-      let cumulativeWeight = 0, random = Math.random();
-      for (let i = 0; i < weights.length; i++) {
-        cumulativeWeight += weights[i];
-        if (random <= cumulativeWeight) { moves[i](); beatCount++; return; }
       }
-      moves[0](); beatCount++;
-    }
+      const trailElements = [...ghosts, character];
 
-    function animationLoop(currentTime) {
-      if (!isPlaying) return;
+      let currentState = { x: 0, y: 0, scale: 1, rot: 0 };
+      let targetState = { x: 0, y: 0, scale: 1, rot: 0 };
+      let lastFrameState = { ...currentState };
 
-      if (currentTime >= nextBeatTime) {
-        performRandomMove();
-        nextBeatTime += 60000 / TEMPO_BPM;
+      function updateCharacterSize() {
+        const size = window.innerHeight * CHARACTER_SCALE;
+        trailElements.forEach((el) => {
+          el.style.height = `${size}px`;
+        });
       }
 
-      currentState.x = lerp(currentState.x, targetState.x, EASE_FACTOR);
-      currentState.y = lerp(currentState.y, targetState.y, EASE_FACTOR);
-      currentState.scale = lerp(currentState.scale, targetState.scale, EASE_FACTOR);
-      currentState.rot = lerp(currentState.rot, targetState.rot, EASE_FACTOR);
+      const lerp = (a, b, alpha) => a + (b - a) * alpha;
+      function setAnimationTarget(duration) {
+        setTimeout(() => {
+          targetState.x = 0;
+          targetState.y = 0;
+          targetState.scale = 1;
+          targetState.rot = targetState.rot % 360;
+        }, duration);
+      }
+      function bounceOnly() {
+        targetState.y = -window.innerHeight * (JUMP_HEIGHT_VH / 100);
+        setAnimationTarget(400);
+      }
+      function bounceWithSpin() {
+        targetState.y = -window.innerHeight * ((JUMP_HEIGHT_VH + 5) / 100);
+        targetState.rot += Math.random() > 0.5 ? 360 : -360;
+        setAnimationTarget(500);
+      }
+      function bounceWithSideMove() {
+        targetState.y = -window.innerHeight * (JUMP_HEIGHT_VH / 100);
+        targetState.x =
+          (Math.random() - 0.5) *
+          (window.innerWidth * (SIDE_MOVEMENT_RANGE_VW / 100));
+        setAnimationTarget(450);
+      }
+      function bounceWithScale() {
+        targetState.y = -window.innerHeight * ((JUMP_HEIGHT_VH - 5) / 100);
+        targetState.scale = SCALE_BOUNCE_FACTOR;
+        setAnimationTarget(400);
+      }
+      function bounceWithDoubleSpin() {
+        targetState.y = -window.innerHeight * ((JUMP_HEIGHT_VH + 10) / 100);
+        targetState.rot += Math.random() > 0.5 ? 720 : -720;
+        setAnimationTarget(600);
+      }
+      function bounceWithWiggle() {
+        const baseRot = targetState.rot;
+        const sequence = [
+          { t: 80, s: { x: -50, y: -100, rot: baseRot + 15 } },
+          { t: 80, s: { x: 50, y: -200, rot: baseRot - 15 } },
+          { t: 80, s: { x: -50, y: -300, rot: baseRot + 10 } },
+          { t: 80, s: { x: 0, y: 0, rot: baseRot } },
+        ];
+        let delay = 0;
+        sequence.forEach((step) => {
+          setTimeout(() => {
+            Object.assign(targetState, step.s);
+          }, delay);
+          delay += step.t;
+        });
+      }
+      function performRandomMove() {
+        const moves = [
+          bounceOnly,
+          bounceWithSpin,
+          bounceWithSideMove,
+          bounceWithScale,
+          bounceWithDoubleSpin,
+          bounceWithWiggle,
+        ];
+        const weights = [0.3, 0.25, 0.2, 0.15, 0.07, 0.03];
+        let cumulativeWeight = 0,
+          random = Math.random();
+        for (let i = 0; i < weights.length; i++) {
+          cumulativeWeight += weights[i];
+          if (random <= cumulativeWeight) {
+            moves[i]();
+            break;
+          }
+        }
 
-      const movementDelta = Math.abs(currentState.x - targetState.x) +
-                            Math.abs(currentState.y - targetState.y) +
-                            Math.abs(currentState.scale - targetState.scale) * 50 +
-                            Math.abs(currentState.rot - targetState.rot);
+        if (Math.random() < SWITCH_PROBABILITY) {
+          let totalWeight = CHARACTER_IMAGES.reduce(
+            (sum, img) => sum + img.weight,
+            0
+          );
+          let r = Math.random() * totalWeight;
+          for (const img of CHARACTER_IMAGES) {
+            r -= img.weight;
+            if (r <= 0) {
+              character.src = img.src;
+              ghosts.forEach((ghost) => (ghost.src = img.src));
+              break;
+            }
+          }
+        }
 
-      const isMoving = movementDelta > MOTION_THRESHOLD;
-
-      const sharedOpacity = 1 / (GHOSTS_PER_FRAME + 1);
-      for (let i = 0; i < trailElements.length; i++) {
-        const element = trailElements[i];
-        const fraction = (i + 1) / trailElements.length;
-        const interpX = lerp(lastFrameState.x, currentState.x, fraction);
-        const interpY = lerp(lastFrameState.y, currentState.y, fraction);
-        const interpScale = lerp(lastFrameState.scale, currentState.scale, fraction);
-        const interpRot = lerp(lastFrameState.rot, currentState.rot, fraction);
-
-        element.style.transform = `translateX(-50%) translate(${interpX}px, ${interpY}px) scale(${interpScale}) rotate(${interpRot}deg)`;
-        element.style.opacity = sharedOpacity * 3;
+        beatCount++;
       }
 
-      lastFrameState = { ...currentState };
-      animationId = requestAnimationFrame(animationLoop);
-    }
+      function animationLoop(currentTime) {
+        if (!isPlaying) return;
 
-    async function play() {
-      try {
-        await music.play();
-        isPlaying = true;
-        nextBeatTime = performance.now() + BEAT_OFFSET_MS;
-        currentState = { x: 0, y: 0, scale: 1, rot: 0 };
-        targetState = { ...currentState };
+        if (currentTime >= nextBeatTime) {
+          performRandomMove();
+          nextBeatTime += 60000 / TEMPO_BPM;
+        }
+
+        currentState.x = lerp(currentState.x, targetState.x, EASE_FACTOR);
+        currentState.y = lerp(currentState.y, targetState.y, EASE_FACTOR);
+        currentState.scale = lerp(
+          currentState.scale,
+          targetState.scale,
+          EASE_FACTOR
+        );
+        currentState.rot = lerp(currentState.rot, targetState.rot, EASE_FACTOR);
+
+        const movementDelta =
+          Math.abs(currentState.x - targetState.x) +
+          Math.abs(currentState.y - targetState.y) +
+          Math.abs(currentState.scale - targetState.scale) * 50 +
+          Math.abs(currentState.rot - targetState.rot);
+
+        const isMoving = movementDelta > MOTION_THRESHOLD;
+
+        const sharedOpacity = 1 / (GHOSTS_PER_FRAME + 1);
+        for (let i = 0; i < trailElements.length; i++) {
+          const element = trailElements[i];
+          const fraction = (i + 1) / trailElements.length;
+          const interpX = lerp(lastFrameState.x, currentState.x, fraction);
+          const interpY = lerp(lastFrameState.y, currentState.y, fraction);
+          const interpScale = lerp(
+            lastFrameState.scale,
+            currentState.scale,
+            fraction
+          );
+          const interpRot = lerp(
+            lastFrameState.rot,
+            currentState.rot,
+            fraction
+          );
+
+          element.style.transform = `translateX(-50%) translate(${interpX}px, ${interpY}px) scale(${interpScale}) rotate(${interpRot}deg)`;
+          element.style.opacity = sharedOpacity * 3;
+        }
+
         lastFrameState = { ...currentState };
         animationId = requestAnimationFrame(animationLoop);
-        playButton.style.display = 'none';
-        beatCount = 0;
-      } catch (err) { console.error('Playback failed:', err); }
-    }
-    function pause() {
-      music.pause();
-      isPlaying = false;
-      if (animationId) cancelAnimationFrame(animationId);
-      ghosts.forEach(ghost => ghost.style.opacity = '0');
-      character.style.opacity = '1';
-      playButton.style.display = 'block';
-    }
+      }
 
-    window.addEventListener('resize', updateCharacterSize);
-    updateCharacterSize();
-    playButton.addEventListener('click', play);
-    document.body.addEventListener('click', (e) => {
-      if (e.target === playButton) return;
-      if (isPlaying) pause();
-    });
-  </script>
-</body>
+      async function play() {
+        try {
+          await music.play();
+          isPlaying = true;
+          nextBeatTime = performance.now() + BEAT_OFFSET_MS;
+          currentState = { x: 0, y: 0, scale: 1, rot: 0 };
+          targetState = { ...currentState };
+          lastFrameState = { ...currentState };
+          animationId = requestAnimationFrame(animationLoop);
+          playButton.style.display = "none";
+          beatCount = 0;
+        } catch (err) {
+          console.error("Playback failed:", err);
+        }
+      }
+      function pause() {
+        music.pause();
+        isPlaying = false;
+        if (animationId) cancelAnimationFrame(animationId);
+        ghosts.forEach((ghost) => (ghost.style.opacity = "0"));
+        character.style.opacity = "1";
+        playButton.style.display = "block";
+      }
+
+      window.addEventListener("resize", updateCharacterSize);
+      updateCharacterSize();
+      playButton.addEventListener("click", play);
+      document.body.addEventListener("click", (e) => {
+        if (e.target === playButton) return;
+        if (isPlaying) pause();
+      });
+
+      let lastAudioTime = 0;
+      music.addEventListener("timeupdate", () => {
+        if (music.currentTime < lastAudioTime) {
+          // Loop detected
+          nextBeatTime = performance.now() + BEAT_OFFSET_MS;
+        }
+        lastAudioTime = music.currentTime;
+      });
+    </script>
+  </body>
 </html>
