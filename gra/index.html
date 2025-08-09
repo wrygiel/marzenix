@@ -1,251 +1,501 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-<title>Jaskiniowa gra - single file</title>
-<style>
-  html,body{height:100%;margin:0;background:#050505;color:#eee;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
-  #game{display:flex;height:100vh;align-items:stretch}
-  canvas{background:#07060a;display:block;flex:1}
-  .hud{width:320px;max-width:40%;background:#0b0b0f;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px}
-  .title{font-weight:700;font-size:18px}
-  .log{flex:1;background:#050507;padding:8px;border-radius:6px;overflow:auto;font-size:13px}
-  .inv{display:flex;gap:8px;flex-wrap:wrap}
-  .item{background:#15151b;padding:6px 8px;border-radius:6px;border:1px solid #222;min-width:64px;text-align:center}
-  .controls{display:flex;gap:6px;justify-content:center;padding-top:6px}
-  button{padding:10px;border-radius:10px;border:none;background:#222;color:#fff;font-weight:600}
-  .touch{position:fixed;left:8px;bottom:8px;display:flex;gap:8px}
-  .touch .dpad{width:140px;height:140px;background:transparent;touch-action:none}
-  .touch .actions{display:flex;flex-direction:column;gap:8px}
-  .action{width:64px;height:64px;border-radius:32px;background:#222;display:flex;align-items:center;justify-content:center;font-weight:700}
-  @media(min-width:900px){.hud{width:280px}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cave Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #gameArea {
+            width: 100%;
+            height: 70vh;
+            background: #2d2d2d;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #player {
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            border-radius: 50%;
+            position: absolute;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .room {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            background: #2d2d2d;
+        }
+
+        .wall {
+            background: #666;
+            position: absolute;
+        }
+
+        .item {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            position: absolute;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .rope { background: #8B4513; }
+        .anchor { background: #C0C0C0; }
+        .key { background: #FFD700; }
+        .torch { background: #FF4500; }
+
+        .door {
+            width: 40px;
+            height: 60px;
+            background: #8B4513;
+            position: absolute;
+            border: 2px solid #654321;
+        }
+
+        .locked {
+            background: #654321 !important;
+        }
+
+        .pit {
+            width: 80px;
+            height: 20px;
+            background: #000;
+            position: absolute;
+            border-radius: 10px;
+        }
+
+        .climbable {
+            background: #228B22 !important;
+        }
+
+        #ui {
+            height: 30vh;
+            background: #333;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #inventory {
+            flex: 1;
+            border: 2px solid #555;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        #inventoryItems {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .inventoryItem {
+            padding: 5px 10px;
+            background: #555;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .selected {
+            background: #4CAF50 !important;
+        }
+
+        #controls {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+            gap: 5px;
+            height: 120px;
+        }
+
+        .control-btn {
+            background: #555;
+            border: none;
+            color: white;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .control-btn:active {
+            background: #777;
+        }
+
+        #upBtn { grid-column: 2; grid-row: 1; }
+        #leftBtn { grid-column: 1; grid-row: 2; }
+        #rightBtn { grid-column: 3; grid-row: 2; }
+        #downBtn { grid-column: 2; grid-row: 3; }
+        #useBtn { grid-column: 2; grid-row: 2; background: #4CAF50; }
+
+        #message {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none;
+            z-index: 100;
+        }
+    </style>
 </head>
 <body>
-<div id="game">
-  <canvas id="c" width="960" height="540"></canvas>
-  <div class="hud">
-    <div class="title">Jaskinia — demo eksploracji</div>
-    <div class="log" id="log">Witaj! Eksploruj, zbieraj przedmioty i rozwiązuj zagadki.</div>
-    <div>Inwentarz:</div>
-    <div class="inv" id="inv"></div>
-    <div style="font-size:13px;color:#bbb">Sterowanie: strzałki/LR lub przyciski dotykowe. "A" - interakcja/akcja.</div>
-    <div style="display:flex;gap:6px;justify-content:space-between">
-      <button id="restart">Restart</button>
-      <button id="hint">Podpowiedź</button>
+    <div id="gameContainer">
+        <div id="gameArea">
+            <div id="player"></div>
+            <div id="currentRoom" class="room"></div>
+        </div>
+
+        <div id="ui">
+            <div id="inventory">
+                <div>Ekwipunek:</div>
+                <div id="inventoryItems"></div>
+            </div>
+
+            <div id="controls">
+                <button id="upBtn" class="control-btn">↑</button>
+                <button id="leftBtn" class="control-btn">←</button>
+                <button id="useBtn" class="control-btn">USE</button>
+                <button id="rightBtn" class="control-btn">→</button>
+                <button id="downBtn" class="control-btn">↓</button>
+            </div>
+        </div>
+
+        <div id="message"></div>
     </div>
-  </div>
-</div>
 
-<!-- dotykowe kontrolki -->
-<div class="touch" id="touch">
-  <canvas class="dpad" id="dpad" width="140" height="140"></canvas>
-  <div class="actions">
-    <div class="action" id="act">A</div>
-    <div style="height:8px"></div>
-    <div class="action" id="jump">↑</div>
-  </div>
-</div>
+    <script type="text/javascript">
+        class CaveExplorer {
+            constructor() {
+                this.player = { x: 50, y: 50, room: 0 };
+                this.inventory = [];
+                this.selectedItem = null;
+                this.currentRoom = 0;
 
-<script>
-(() => {
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  const logEl = document.getElementById('log');
-  const invEl = document.getElementById('inv');
-  const restartBtn = document.getElementById('restart');
-  const hintBtn = document.getElementById('hint');
-  const actBtn = document.getElementById('act');
-  const jumpBtn = document.getElementById('jump');
-  const dpad = document.getElementById('dpad');
-  const dctx = dpad.getContext('2d');
+                this.rooms = [
+                    // Room 0 - Start
+                    {
+                        items: [
+                            { type: 'rope', x: 200, y: 100 },
+                            { type: 'torch', x: 300, y: 150 }
+                        ],
+                        walls: [
+                            { x: 0, y: 0, width: 20, height: 400 },
+                            { x: 0, y: 0, width: 400, height: 20 },
+                            { x: 380, y: 0, width: 20, height: 400 },
+                            { x: 0, y: 380, width: 400, height: 20 }
+                        ],
+                        doors: [
+                            { x: 360, y: 180, width: 20, height: 40, toRoom: 1, locked: false }
+                        ],
+                        obstacles: []
+                    },
+                    // Room 1 - Pit room
+                    {
+                        items: [
+                            { type: 'key', x: 300, y: 50 }
+                        ],
+                        walls: [
+                            { x: 0, y: 0, width: 20, height: 400 },
+                            { x: 0, y: 0, width: 400, height: 20 },
+                            { x: 380, y: 0, width: 20, height: 400 },
+                            { x: 0, y: 380, width: 400, height: 20 }
+                        ],
+                        doors: [
+                            { x: 0, y: 180, width: 20, height: 40, toRoom: 0, locked: false },
+                            { x: 360, y: 180, width: 20, height: 40, toRoom: 2, locked: true }
+                        ],
+                        obstacles: [
+                            { type: 'pit', x: 150, y: 200, width: 80, height: 20, climbable: false }
+                        ]
+                    },
+                    // Room 2 - Anchor room
+                    {
+                        items: [
+                            { type: 'anchor', x: 100, y: 100 }
+                        ],
+                        walls: [
+                            { x: 0, y: 0, width: 20, height: 400 },
+                            { x: 0, y: 0, width: 400, height: 20 },
+                            { x: 380, y: 0, width: 20, height: 400 },
+                            { x: 0, y: 380, width: 400, height: 20 }
+                        ],
+                        doors: [
+                            { x: 0, y: 180, width: 20, height: 40, toRoom: 1, locked: false }
+                        ],
+                        obstacles: []
+                    }
+                ];
 
-  // --- world tilemap ---
-  // 0 empty, 1 wall, 2 item anchor, 3 item line, 4 chasm, 5 door (locked), 6 lever
-  const mapW = 60, mapH = 34, tile = 32;
-  let map = [];
-  function genMap(){
-    map = new Array(mapH).fill(0).map(()=>new Array(mapW).fill(1));
-    // carve a winding cave path
-    let x = 4, y = 4;
-    for(let i=0;i<120;i++){
-      map[y][x]=0;
-      if(Math.random()<0.5) x+=1; else y+= (Math.random()<0.6?1:0);
-      x = Math.min(mapW-6,x);
-      y = Math.min(mapH-6,y);
-    }
-    // add branches
-    for(let b=0;b<30;b++){
-      let bx = 6+Math.floor(Math.random()*(mapW-12));
-      let by = 6+Math.floor(Math.random()*(mapH-12));
-      const len = 6+Math.floor(Math.random()*10);
-      for(let i=0;i<len;i++){ map[by][bx]=0; bx+=Math.floor(Math.random()*3)-1; by+=Math.floor(Math.random()*3)-1; bx = Math.max(2,Math.min(mapW-3,bx)); by = Math.max(2,Math.min(mapH-3,by)); }
-    }
-    // create a chasm
-    const cx = 28, cy = 20, chW = 6;
-    for(let i=0;i<chW;i++) map[cy][cx+i]=4;
-    // place items
-    map[8][8]=2; // anchor
-    map[12][4]=3; // line
-    map[26][32]=6; // lever puzzle
-    map[20][44]=5; // locked door
-    // clear around player start
-    for(let yy=2;yy<8;yy++) for(let xx=2;xx<8;xx++) map[yy][xx]=0;
-  }
+                this.init();
+            }
 
-  genMap();
+            init() {
+                this.updateDisplay();
+                this.setupControls();
+                this.showMessage("Witaj w jaskini! Eksploruj i zbieraj przedmioty.");
+            }
 
-  // --- player ---
-  const player = {x:6.5*tile,y:6*tile,vx:0,vy:0,w:20,h:28,onGround:false,facing:1,inventory:[],ropeAttached:false}
-  let keys = {left:false,right:false,up:false,act:false};
+            setupControls() {
+                document.getElementById('upBtn').addEventListener('touchstart', () => this.movePlayer(0, -30));
+                document.getElementById('downBtn').addEventListener('touchstart', () => this.movePlayer(0, 30));
+                document.getElementById('leftBtn').addEventListener('touchstart', () => this.movePlayer(-30, 0));
+                document.getElementById('rightBtn').addEventListener('touchstart', () => this.movePlayer(30, 0));
+                document.getElementById('useBtn').addEventListener('touchstart', () => this.useItem());
 
-  function log(s){ logEl.innerHTML += '<div>'+s+'</div>'; logEl.scrollTop = logEl.scrollHeight; }
+                // Keyboard support
+                document.addEventListener('keydown', (e) => {
+                    switch(e.key) {
+                        case 'ArrowUp': this.movePlayer(0, -30); break;
+                        case 'ArrowDown': this.movePlayer(0, 30); break;
+                        case 'ArrowLeft': this.movePlayer(-30, 0); break;
+                        case 'ArrowRight': this.movePlayer(30, 0); break;
+                        case ' ': this.useItem(); break;
+                    }
+                });
+            }
 
-  function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    // camera
-    const camx = player.x - canvas.width/2 + player.w/2;
-    const camy = player.y - canvas.height/2 + player.h/2;
-    // draw tiles
-    for(let y=0;y<mapH;y++) for(let x=0;x<mapW;x++){
-      const t = map[y][x];
-      const sx = x*tile-camx, sy = y*tile-camy;
-      if(sx+tile<0||sy+tile<0||sx>canvas.width||sy>canvas.height) continue;
-      if(t===1){ ctx.fillStyle='#222'; ctx.fillRect(sx,sy,tile,tile); }
-      else if(t===0){ ctx.fillStyle='#0a0a11'; ctx.fillRect(sx,sy,tile,tile); }
-      else if(t===2){ ctx.fillStyle='#444'; ctx.fillRect(sx,sy,tile,tile); ctx.fillStyle='#c7b24a'; ctx.fillRect(sx+8,sy+8,16,16); }
-      else if(t===3){ ctx.fillStyle='#444'; ctx.fillRect(sx,sy,tile,tile); ctx.fillStyle='#bfa'; ctx.fillRect(sx+6,sy+10,20,12); }
-      else if(t===4){ ctx.fillStyle='#071021'; ctx.fillRect(sx,sy,tile,tile); ctx.fillStyle='#010'; ctx.fillRect(sx+4,sy+8,24,16); }
-      else if(t===5){ ctx.fillStyle='#332'; ctx.fillRect(sx,sy,tile,tile); ctx.fillStyle='#111'; ctx.fillRect(sx+6,sy+2,20,tile-4); }
-      else if(t===6){ ctx.fillStyle='#0a0a0a'; ctx.fillRect(sx,sy,tile,tile); ctx.fillStyle='#7f3'; ctx.fillRect(sx+10,sy+6,12,20); }
-    }
-    // draw rope if attached
-    if(player.ropeAttached){ ctx.strokeStyle='#8b5a2b'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(player.x+player.w/2-camx, player.y+player.h/2-camy); ctx.lineTo(player.ropeX-camx, player.ropeY-camy); ctx.stroke(); }
-    // draw player
-    ctx.fillStyle='#dfe'; ctx.fillRect(player.x-camx, player.y-camy, player.w, player.h);
-    // HUD small
-    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(8,8,180,40);
-    ctx.fillStyle='#fff'; ctx.fillText('Pozycja: '+Math.floor(player.x/tile)+','+Math.floor(player.y/tile),12,30);
-  }
+            movePlayer(dx, dy) {
+                const newX = this.player.x + dx;
+                const newY = this.player.y + dy;
 
-  // --- physics & collision ---
-  function solidAt(tx,ty){ if(tx<0||ty<0||tx>=mapW||ty>=mapH) return true; const t=map[ty][tx]; return t===1||t===5; }
-  function update(dt){
-    const speed = 120;
-    if(keys.left) player.vx = -speed; else if(keys.right) player.vx = speed; else player.vx = 0;
-    player.vy += 800*dt; // gravity
-    // apply velocity
-    let nx = player.x + player.vx*dt;
-    let ny = player.y + player.vy*dt;
-    // horizontal collision
-    const left = Math.floor(nx/ tile), right = Math.floor((nx+player.w-1)/tile);
-    const top = Math.floor(player.y/ tile), bottom = Math.floor((player.y+player.h-1)/tile);
-    if(player.vx>0 && (solidAt(right,top) || solidAt(right,bottom))){ nx = right*tile - player.w; player.vx=0; }
-    if(player.vx<0 && (solidAt(left,top) || solidAt(left,bottom))){ nx = (left+1)*tile; player.vx=0; }
-    // vertical collision
-    const left2 = Math.floor(nx/ tile), right2 = Math.floor((nx+player.w-1)/tile);
-    const top2 = Math.floor(ny/ tile), bottom2 = Math.floor((ny+player.h-1)/tile);
-    player.onGround = false;
-    if(player.vy>0 && (solidAt(left2,bottom2) || solidAt(right2,bottom2))){ ny = bottom2*tile - player.h; player.vy = 0; player.onGround = true; }
-    if(player.vy<0 && (solidAt(left2,top2) || solidAt(right2,top2))){ ny = (top2+1)*tile; player.vy = 0; }
-    player.x = nx; player.y = ny;
-    // interactions with tile types
-    const px = Math.floor((player.x+player.w/2)/tile), py = Math.floor((player.y+player.h/2)/tile);
-    const t = map[py] && map[py][px];
-    // auto pickup for items (anchor/line)
-    if(t===2){ player.inventory.push('Kotwica'); map[py][px]=0; log('Znalazłeś kotwicę!'); updateInv(); }
-    if(t===3){ player.inventory.push('Lina'); map[py][px]=0; log('Znalazłeś linę!'); updateInv(); }
-    // chasm: fall through — if you fall into chasm (tile 4) you die unless ropeAttached
-    if(t===4 && !player.ropeAttached){ // check if player center is over chasm
-      // simple fall death
-      if(player.y/tile > py+1){ log('Spadłeś w przepaść. Restart.'); reset(); }
-    }
-  }
+                if (this.canMoveTo(newX, newY)) {
+                    this.player.x = newX;
+                    this.player.y = newY;
+                    this.checkCollisions();
+                    this.updateDisplay();
+                }
+            }
 
-  function reset(){ genMap(); player.x=6.5*tile;player.y=6*tile;player.vx=0;player.vy=0;player.inventory=[];player.ropeAttached=false;updateInv(); }
+            canMoveTo(x, y) {
+                const room = this.rooms[this.currentRoom];
 
-  // --- interaction: use A near objects ---
-  function interact(){
-    const px = Math.floor((player.x+player.w/2)/tile), py = Math.floor((player.y+player.h/2)/tile);
-    // lever puzzle: flip and open door if sequence right
-    for(let yy=-1;yy<=1;yy++) for(let xx=-1;xx<=1;xx++){
-      const tx = px+xx, ty = py+yy; if(tx<0||ty<0||tx>=mapW||ty>=mapH) continue; const t = map[ty][tx];
-      if(t===6){ // lever
-        map[ty][tx]=0; log('Pociągnąłeś dźwignię. Słychać mechanizm...'); checkPuzzle();
-        return;
-      }
-      if(t===5){ // door
-        // check if unlocked
-        if(!doorLocked){ map[ty][tx]=0; log('Otworzyłeś drzwi.'); } else { log('Drzwi są zamknięte.'); }
-        return;
-      }
-    }
-    // use rope mechanics: if have both items you can attach rope to cross chasm
-    if(player.inventory.includes('Kotwica') && player.inventory.includes('Lina')){
-      // find nearest chasm tile in front
-      const dir = player.facing || 1;
-      for(let i=1;i<10;i++){
-        const tx = Math.floor((player.x+player.w/2 + dir*i*tile)/tile), ty = Math.floor((player.y+player.h/2)/tile);
-        if(map[ty] && map[ty][tx]===4){ // attach rope across
-          player.ropeAttached=true; player.ropeX = (tx+0.5)*tile; player.ropeY = ty*tile; log('Przyczepiłeś kotwicę i zarzuciłeś linę — możesz przejść po linie (skieruj się w stronę przepaści).'); return;
+                // Check walls
+                for (let wall of room.walls) {
+                    if (x + 15 > wall.x && x - 15 < wall.x + wall.width &&
+                        y + 15 > wall.y && y - 15 < wall.y + wall.height) {
+                        return false;
+                    }
+                }
+
+                // Check obstacles (except climbable pits)
+                for (let obstacle of room.obstacles) {
+                    if (!obstacle.climbable &&
+                        x + 15 > obstacle.x && x - 15 < obstacle.x + obstacle.width &&
+                        y + 15 > obstacle.y && y - 15 < obstacle.y + obstacle.height) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            checkCollisions() {
+                const room = this.rooms[this.currentRoom];
+
+                // Check items
+                room.items = room.items.filter(item => {
+                    if (Math.abs(this.player.x - item.x) < 25 && Math.abs(this.player.y - item.y) < 25) {
+                        this.collectItem(item.type);
+                        return false;
+                    }
+                    return true;
+                });
+
+                // Check doors
+                for (let door of room.doors) {
+                    if (this.player.x + 15 > door.x && this.player.x - 15 < door.x + door.width &&
+                        this.player.y + 15 > door.y && this.player.y - 15 < door.y + door.height) {
+                        if (!door.locked) {
+                            this.currentRoom = door.toRoom;
+                            this.player.x = door.toRoom > this.currentRoom ? 50 : 330;
+                            this.showMessage("Przeszedłeś do nowego pomieszczenia!");
+                            break;
+                        } else {
+                            this.showMessage("Drzwi są zamknięte!");
+                        }
+                    }
+                }
+            }
+
+            collectItem(type) {
+                this.inventory.push(type);
+                this.showMessage(`Zebrałeś: ${this.getItemName(type)}`);
+                this.updateInventory();
+            }
+
+            getItemName(type) {
+                const names = {
+                    'rope': 'Lina',
+                    'anchor': 'Kotwa',
+                    'key': 'Klucz',
+                    'torch': 'Pochodnia'
+                };
+                return names[type] || type;
+            }
+
+            useItem() {
+                if (!this.selectedItem) {
+                    this.showMessage("Najpierw wybierz przedmiot z ekwipunku!");
+                    return;
+                }
+
+                const room = this.rooms[this.currentRoom];
+
+                // Use key on locked door
+                if (this.selectedItem === 'key') {
+                    for (let door of room.doors) {
+                        if (door.locked &&
+                            Math.abs(this.player.x - (door.x + door.width/2)) < 40 &&
+                            Math.abs(this.player.y - (door.y + door.height/2)) < 40) {
+                            door.locked = false;
+                            this.inventory.splice(this.inventory.indexOf('key'), 1);
+                            this.selectedItem = null;
+                            this.showMessage("Otworzyłeś drzwi!");
+                            this.updateInventory();
+                            this.updateDisplay();
+                            return;
+                        }
+                    }
+                }
+
+                // Use rope + anchor on pit
+                if (this.selectedItem === 'rope' && this.inventory.includes('anchor')) {
+                    for (let obstacle of room.obstacles) {
+                        if (obstacle.type === 'pit' && !obstacle.climbable &&
+                            Math.abs(this.player.x - (obstacle.x + obstacle.width/2)) < 60 &&
+                            Math.abs(this.player.y - (obstacle.y + obstacle.height/2)) < 60) {
+                            obstacle.climbable = true;
+                            this.inventory.splice(this.inventory.indexOf('rope'), 1);
+                            this.inventory.splice(this.inventory.indexOf('anchor'), 1);
+                            this.selectedItem = null;
+                            this.showMessage("Użyłeś liny z kotwą! Możesz przejść przez dziurę.");
+                            this.updateInventory();
+                            this.updateDisplay();
+                            return;
+                        }
+                    }
+                }
+
+                this.showMessage("Nie możesz tutaj użyć tego przedmiotu.");
+            }
+
+            updateDisplay() {
+                const player = document.getElementById('player');
+                player.style.left = this.player.x + 'px';
+                player.style.top = this.player.y + 'px';
+
+                const roomDiv = document.getElementById('currentRoom');
+                roomDiv.innerHTML = '';
+
+                const room = this.rooms[this.currentRoom];
+
+                // Add walls
+                room.walls.forEach(wall => {
+                    const wallDiv = document.createElement('div');
+                    wallDiv.className = 'wall';
+                    wallDiv.style.left = wall.x + 'px';
+                    wallDiv.style.top = wall.y + 'px';
+                    wallDiv.style.width = wall.width + 'px';
+                    wallDiv.style.height = wall.height + 'px';
+                    roomDiv.appendChild(wallDiv);
+                });
+
+                // Add items
+                room.items.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `item ${item.type}`;
+                    itemDiv.style.left = item.x + 'px';
+                    itemDiv.style.top = item.y + 'px';
+                    roomDiv.appendChild(itemDiv);
+                });
+
+                // Add doors
+                room.doors.forEach(door => {
+                    const doorDiv = document.createElement('div');
+                    doorDiv.className = `door ${door.locked ? 'locked' : ''}`;
+                    doorDiv.style.left = door.x + 'px';
+                    doorDiv.style.top = door.y + 'px';
+                    doorDiv.style.width = door.width + 'px';
+                    doorDiv.style.height = door.height + 'px';
+                    roomDiv.appendChild(doorDiv);
+                });
+
+                // Add obstacles
+                room.obstacles.forEach(obstacle => {
+                    const obstacleDiv = document.createElement('div');
+                    obstacleDiv.className = `${obstacle.type} ${obstacle.climbable ? 'climbable' : ''}`;
+                    obstacleDiv.style.left = obstacle.x + 'px';
+                    obstacleDiv.style.top = obstacle.y + 'px';
+                    obstacleDiv.style.width = obstacle.width + 'px';
+                    obstacleDiv.style.height = obstacle.height + 'px';
+                    roomDiv.appendChild(obstacleDiv);
+                });
+            }
+
+            updateInventory() {
+                const inventoryDiv = document.getElementById('inventoryItems');
+                inventoryDiv.innerHTML = '';
+
+                this.inventory.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `inventoryItem ${this.selectedItem === item ? 'selected' : ''}`;
+                    itemDiv.textContent = this.getItemName(item);
+                    itemDiv.addEventListener('click', () => {
+                        this.selectedItem = this.selectedItem === item ? null : item;
+                        this.updateInventory();
+                    });
+                    inventoryDiv.appendChild(itemDiv);
+                });
+            }
+
+            showMessage(text) {
+                const messageDiv = document.getElementById('message');
+                messageDiv.textContent = text;
+                messageDiv.style.display = 'block';
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 3000);
+            }
         }
-      }
-    }
-    log('Nie ma nic do interakcji tu.');
-  }
 
-  let doorLocked = true; let leverCount = 0;
-  function checkPuzzle(){
-    leverCount++;
-    if(leverCount>=3){ doorLocked=false; log('Usłyszałeś odblokowanie drzwi gdzieś w jaskini...'); }
-  }
-
-  function updateInv(){ invEl.innerHTML = '';
-    player.inventory.forEach((it,i)=>{ const el = document.createElement('div'); el.className='item'; el.textContent=it; invEl.appendChild(el); });
-  }
-
-  // --- input handling ---
-  window.addEventListener('keydown', e=>{
-    if(e.key==='ArrowLeft'){ keys.left=true; player.facing=-1 }
-    if(e.key==='ArrowRight'){ keys.right=true; player.facing=1 }
-    if(e.key==='ArrowUp'){ if(player.onGround){ player.vy=-320; player.onGround=false; } }
-    if(e.key==='a' || e.key==='A'){ interact(); }
-  });
-  window.addEventListener('keyup', e=>{ if(e.key==='ArrowLeft') keys.left=false; if(e.key==='ArrowRight') keys.right=false; });
-
-  // touch D-pad
-  function drawDpad(){ dctx.clearRect(0,0,dpad.width,dpad.height); dctx.fillStyle='#111'; dctx.beginPath(); dctx.arc(70,70,64,0,Math.PI*2); dctx.fill(); dctx.fillStyle='#333'; dctx.fillRect(36,58,68,24); dctx.fillRect(58,36,24,68); }
-  drawDpad();
-  let touchId = null;
-  dpad.addEventListener('touchstart', handleTouch);
-  dpad.addEventListener('touchmove', handleTouch);
-  dpad.addEventListener('touchend', e=>{ keys.left=false; keys.right=false; touchId=null; });
-  function handleTouch(e){ e.preventDefault(); const t = e.changedTouches[0]; const r = dpad.getBoundingClientRect(); const x = t.clientX - r.left - r.width/2; const y = t.clientY - r.top - r.height/2; if(Math.abs(x)>Math.abs(y)){ if(x< -10){ keys.left=true; keys.right=false; player.facing=-1 } else if(x>10){ keys.right=true; keys.left=false; player.facing=1 } } else { keys.left=false; keys.right=false; }
-  }
-  // action/jump touch
-  actBtn.addEventListener('touchstart', e=>{ e.preventDefault(); interact(); });
-  actBtn.addEventListener('click', e=>interact());
-  jumpBtn.addEventListener('touchstart', e=>{ if(player.onGround){ player.vy=-320; player.onGround=false; } });
-  jumpBtn.addEventListener('click', e=>{ if(player.onGround){ player.vy=-320; player.onGround=false; } });
-
-  // desktop UI buttons
-  restartBtn.addEventListener('click', ()=>{ reset(); log('Restart gry.'); });
-  hintBtn.addEventListener('click', ()=>{ log('Podpowiedź: Szukaj kotwicy i liny, a także pociągnij dźwignie aby odblokować drzwi.'); });
-
-  // simple game loop
-  let last = performance.now();
-  function loop(t){ const dt = Math.min(0.03,(t-last)/1000); update(dt); draw(); last = t; requestAnimationFrame(loop); }
-  requestAnimationFrame(loop);
-
-  // small UX touches
-  updateInv();
-  log('Znajdź kotwicę (złoty kwadrat) i linę (jasna paczka). Pociągnięcie 3 dźwigni otworzy zablokowane drzwi.');
-
-  // resize canvas to viewport while keeping ratio
-  function fit(){ const w = window.innerWidth - Math.min(320, window.innerWidth*0.4) - 6; const h = window.innerHeight; const scale = Math.min(w/960, h/540); canvas.width = Math.floor(960*scale); canvas.height = Math.floor(540*scale); }
-  window.addEventListener('resize', fit); fit();
-})();
-</script>
+        // Start game when page loads
+        window.addEventListener('load', () => {
+            new CaveExplorer();
+        });
+    </script>
 </body>
 </html>
